@@ -179,6 +179,7 @@ app.get('/api/data', async (req, res) => {
     try {
       const collection = client.db(dbName).collection(collectionName);
       const data = await collection.find({}).toArray();
+      console.log(data);
       res.json(data);
     } catch (error) {
       console.error('Error fetching data:', error);

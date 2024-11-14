@@ -41,7 +41,50 @@ const openai = new OpenAI({
 const client = new MongoClient(process.env.MONGODB_URI);
 const dbName = "product_search";
 const collectionName = "products";
+const debugAtlasSearch = async (collection, pipeline) => {
+    try {
+      // Check if index exists
+      const indexes = await collection.listSearchIndexes().toArray();
+      const advancedIndex = indexes.find(idx => idx.name === 'advanced');
+      
+      if (!advancedIndex) {
+        console.error('Advanced search index not found! Available indexes:', 
+          indexes.map(idx => idx.name));
+        return false;
+      }
+  
+      console.log('Advanced index configuration:', JSON.stringify(advancedIndex, null, 2));
+      
+      // Test the pipeline
+      const explain = await collection.aggregate([
+        ...pipeline,
+        { $explain: true }
+      ]).toArray();
+  
+      console.log('Pipeline explanation:', JSON.stringify(explain, null, 2));
+      return true;
+    } catch (error) {
+      console.error('Atlas Search debug error:', error);
+      return false;
+    }
+  };
 
+  async function updateDocumentsWithSearchableTitle() {
+    const collection = client.db(dbName).collection(collectionName);
+    const cursor = collection.find({});
+    
+    for await (const doc of cursor) {
+      await collection.updateOne(
+        { _id: doc._id },
+        { 
+          $set: { 
+            searchableTitle: doc.title 
+          } 
+        }
+      );
+    }
+    console.log('Updated all documents with searchableTitle field');
+  }
 // Search endpoint with multiple search types
 app.post('/api/search', upload.single('image'), async (req, res) => {
     const startTime = performance.now();
@@ -65,13 +108,60 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
       }
 
       case 'atlas': {
-        results = await collection.aggregate([
+        const shouldClauses = [];
+        const options = req.body.options || {
+          fuzzyMatching: true,
+          autoComplete: true,
+          phraseMatching: true
+        };
+      
+        console.log('Search options:', options);
+      
+        // Add phrase matching
+        if (options.phraseMatching) {
+          shouldClauses.push({
+            text: {
+              query: req.body.query,
+              path: ["searchableTitle", "description"],
+              score: { boost: { value: 3 } }
+            }
+          });
+        }
+      
+        // Add fuzzy matching
+        if (options.fuzzyMatching) {
+          shouldClauses.push({
+            text: {
+              query: req.body.query,
+              path: ["searchableTitle", "description", "category"],
+              fuzzy: {
+                maxEdits: 2,
+                prefixLength: 1,
+                maxExpansions: 100
+              },
+              score: { boost: { value: 1 } }
+            }
+          });
+        }
+      
+        // Add autocomplete
+        if (options.autoComplete) {
+          shouldClauses.push({
+            autocomplete: {
+              query: req.body.query,
+              path: "title",
+              score: { boost: { value: 2 } }
+            }
+          });
+        }
+      
+        const searchPipeline = [
           {
             $search: {
-              index: 'default', // make sure this matches your Atlas Search index name
-              text: {
-                query: req.body.query,
-                path: ["title", "description", "category"]
+              index: 'advanced',
+              compound: {
+                should: shouldClauses,
+                minimumShouldMatch: 1
               },
               highlight: {
                 path: ["title", "description"]
@@ -84,6 +174,7 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
               highlights: { $meta: "searchHighlights" }
             }
           },
+          { $sort: { score: -1 } },
           {
             $project: {
               _id: 0,
@@ -96,10 +187,11 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
               highlights: 1
             }
           },
-          { 
-            $limit: 10 
-          }
-        ]).toArray();
+          { $limit: 10 }
+        ];
+      
+        console.log('Executing Atlas Search pipeline:', JSON.stringify(searchPipeline, null, 2));
+        results = await collection.aggregate(searchPipeline).toArray();
         break;
       }
 
@@ -414,7 +506,8 @@ async function enhanceQueryWithGPT(query) {
       const dbInitialized = await initializeDB();
       if (dbInitialized) {
         await seedSampleData();
-        
+        await updateDocumentsWithSearchableTitle();
+
         app.listen(PORT, () => {
           console.log(`Server running on port ${PORT}`);
           console.log(`Health check available at http://localhost:${PORT}/health`);

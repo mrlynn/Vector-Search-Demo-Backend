@@ -65,26 +65,40 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
       }
 
       case 'atlas': {
-        // Atlas Search with text score
         results = await collection.aggregate([
           {
             $search: {
+              index: 'default', // make sure this matches your Atlas Search index name
               text: {
                 query: req.body.query,
-                path: ["title", "description", "category"],
-                fuzzy: {
-                  maxEdits: 1,
-                  prefixLength: 3
-                }
+                path: ["title", "description", "category"]
+              },
+              highlight: {
+                path: ["title", "description"]
               }
             }
           },
           {
             $addFields: {
-              score: { $meta: "searchScore" }
+              score: { $meta: "searchScore" },
+              highlights: { $meta: "searchHighlights" }
             }
           },
-          { $limit: 10 }
+          {
+            $project: {
+              _id: 0,
+              title: 1,
+              description: 1,
+              category: 1,
+              price: 1,
+              image: 1,
+              score: 1,
+              highlights: 1
+            }
+          },
+          { 
+            $limit: 10 
+          }
         ]).toArray();
         break;
       }

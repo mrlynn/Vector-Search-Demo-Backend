@@ -8,8 +8,25 @@ import multer from 'multer';
 dotenv.config();
 
 const app = express();
-app.use(cors());
+// Updated CORS configuration
+app.use(cors({
+    origin: [
+      'http://localhost:5174',
+      'http://localhost:3003',
+      'https://vector-search-demo-frontend.vercel.app',
+      // Add any other frontend URLs you need
+    ],
+    methods: ['GET', 'POST'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true
+  }));
+  
 app.use(express.json());
+
+app.use((req, res, next) => {
+    console.log(`${req.method} ${req.url}`);
+    next();
+  });
 
 const storage = multer.memoryStorage();
 const upload = multer({ 
@@ -27,7 +44,7 @@ const collectionName = "products";
 
 // Search endpoint with multiple search types
 app.post('/api/search', upload.single('image'), async (req, res) => {
-  const startTime = performance.now();
+    const startTime = performance.now();
   try {
     const searchType = req.body.type;
     const collection = client.db(dbName).collection(collectionName);

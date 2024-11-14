@@ -24,7 +24,7 @@ app.use(cors({
 app.use(express.json());
 
 app.use((req, res, next) => {
-    console.log(`${req.method} ${req.url}`);
+    //console.log(`${req.method} ${req.url}`);
     next();
   });
 
@@ -88,6 +88,7 @@ const debugAtlasSearch = async (collection, pipeline) => {
 // Search endpoint with multiple search types
 app.post('/api/search', upload.single('image'), async (req, res) => {
     const startTime = performance.now();
+    console.log('Search request received');
   try {
     const searchType = req.body.type;
     const collection = client.db(dbName).collection(collectionName);
@@ -156,39 +157,63 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
         }
       
         const searchPipeline = [
-          {
-            $search: {
-              index: 'advanced',
-              compound: {
-                should: shouldClauses,
-                minimumShouldMatch: 1
-              },
-              highlight: {
-                path: ["title", "description"]
+            {
+              $search: {
+                index: 'advanced',
+                compound: {
+                  should: shouldClauses,
+                  minimumShouldMatch: 1
+                },
+                highlight: {
+                  path: ["title", "description"]
+                }
               }
-            }
-          },
-          {
-            $addFields: {
-              score: { $meta: "searchScore" },
-              highlights: { $meta: "searchHighlights" }
-            }
-          },
-          { $sort: { score: -1 } },
-          {
-            $project: {
-              _id: 0,
-              title: 1,
-              description: 1,
-              category: 1,
-              price: 1,
-              image: 1,
-              score: 1,
-              highlights: 1
-            }
-          },
-          { $limit: 10 }
-        ];
+            },
+            {
+              $addFields: {
+                score: { $meta: "searchScore" },
+                highlights: { $meta: "searchHighlights" },
+                matchDetails: {
+                  fuzzyMatches: {
+                    $filter: {
+                      input: { $meta: "searchScoreDetails" },
+                      as: "detail",
+                      cond: { $eq: ["$$detail.type", "fuzzy"] }
+                    }
+                  },
+                  phraseMatches: {
+                    $filter: {
+                      input: { $meta: "searchScoreDetails" },
+                      as: "detail",
+                      cond: { $eq: ["$$detail.type", "phrase"] }
+                    }
+                  },
+                  autocompleteMatches: {
+                    $filter: {
+                      input: { $meta: "searchScoreDetails" },
+                      as: "detail",
+                      cond: { $eq: ["$$detail.type", "autocomplete"] }
+                    }
+                  }
+                }
+              }
+            },
+            { $sort: { score: -1 } },
+            {
+              $project: {
+                _id: 0,
+                title: 1,
+                description: 1,
+                category: 1,
+                price: 1,
+                image: 1,
+                score: 1,
+                highlights: 1,
+                matchDetails: 1
+              }
+            },
+            { $limit: 10 }
+          ];
       
         console.log('Executing Atlas Search pipeline:', JSON.stringify(searchPipeline, null, 2));
         results = await collection.aggregate(searchPipeline).toArray();
@@ -314,7 +339,7 @@ app.get('/api/data', async (req, res) => {
   });
 async function enhanceQueryWithGPT(query) {
     const completion = await openai.chat.completions.create({
-      model: "gpt-4-1106-preview",  // Updated model name
+      model: "gpt-4o-mini",  // Updated model name
       messages: [
         {
           role: "system",
@@ -334,10 +359,10 @@ async function enhanceQueryWithGPT(query) {
   
   async function processImage(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
-    
+    console.log('Base64 image:', base64Image);
     try {
       const response = await openai.chat.completions.create({
-        model: "gpt-4-vision-preview-1106",  // Updated model name
+        model: "gpt-4o-mini",  // Updated model name
         messages: [
           {
             role: "user",
@@ -494,7 +519,7 @@ async function enhanceQueryWithGPT(query) {
       }
   
       await collection.insertMany(sampleProducts);
-      console.log(`Inserted ${sampleProducts.length} sample products`);
+    //   console.log(`Inserted ${sampleProducts.length} sample products`);
     }
   }
   

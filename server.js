@@ -4,14 +4,15 @@ import { MongoClient } from 'mongodb';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import multer from 'multer';
-
+import winston from 'winston';
 dotenv.config();
 
 const app = express();
 
 const allowedOrigins = [
     'https://vector-search-demo-frontend.vercel.app',
-    'http://localhost:5173'
+    'http://localhost:5173',
+    'http://localhost:5174'
 ];
 app.use(express.json());
 
@@ -43,6 +44,22 @@ app.use((err, req, res, next) => {
 });
 
 app.options('*', cors()); // Enable pre-flight for all routes
+
+
+const logger = winston.createLogger({
+    level: 'info',
+    format: winston.format.combine(
+      winston.format.timestamp(),
+      winston.format.printf(({ timestamp, level, message }) => `${timestamp} [${level.toUpperCase()}]: ${message}`)
+    ),
+    transports: [
+      new winston.transports.Console(),
+      new winston.transports.File({ filename: 'combined.log' }) // Optional: log to file
+    ]
+  });
+
+
+  logger.info(`Environment: ${process.env.NODE_ENV}`);
 
 const storage = multer.memoryStorage();
 const upload = multer({
@@ -328,6 +345,13 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
             default:
                 throw new Error('Invalid search type');
         }
+        res.json({
+            results: results.map(result => ({
+                ...result,
+                score: result.score ? Math.min(Math.max(result.score, 0), 1) : undefined
+            })),
+            searchTime: (performance.now() - startTime).toFixed(2)
+        });
 
     } catch (error) {
         console.error('Error during search:', error);

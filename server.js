@@ -10,14 +10,9 @@ dotenv.config();
 const app = express();
 // Updated CORS configuration
 app.use(cors({
-    origin: [
-        'http://localhost:5174',
-        'http://localhost:3003',
-        'https://vector-search-demo-frontend.vercel.app',
-        // Add any other frontend URLs you need
-    ],
-    methods: ['GET', 'POST'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
+    origin: ['http://localhost:5173'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
     credentials: true
 }));
 
@@ -87,16 +82,19 @@ async function updateDocumentsWithSearchableTitle() {
 }
 // Search endpoint with multiple search types
 app.post('/api/search', upload.single('image'), async (req, res) => {
+    console.log('Search request received:', req.body);
+
     const startTime = performance.now();
-    console.log('Search request received');
     try {
         const searchType = req.body.type;
+        console.log('Starting search process for type:', req.body.type);
+
         const collection = client.db(dbName).collection(collectionName);
         let results = [];
 
         switch (searchType) {
             case 'basic': {
-                // Basic MongoDB find with regex
+                console.log('Performing basic search');
                 const query = req.body.query;
                 results = await collection.find({
                     $or: [
@@ -105,10 +103,14 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
                         { category: { $regex: query, $options: 'i' } }
                     ]
                 }).limit(10).toArray();
+                console.log('Basic search results:', results);
+
                 break;
             }
 
             case 'atlas': {
+                console.log('Performing Atlas search');
+
                 const shouldClauses = [];
                 const options = req.body.options || {
                     fuzzyMatching: true,
@@ -222,6 +224,8 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
 
             case 'vector': {
                 // Standard vector search
+                console.log('Generating embedding for query:', req.body.query);
+                console.log('Starting vector search process');
                 const embedding = await generateEmbedding(req.body.query);
                 results = await collection.aggregate([
                     {
@@ -305,10 +309,10 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
         }
 
     } catch (error) {
-        console.error('Search error:', error);
+        console.error('Error during search:', error);
         res.status(500).json({
             error: 'Search failed',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
+            details: error.message
         });
     }
 });
@@ -316,6 +320,8 @@ app.post('/api/search', upload.single('image'), async (req, res) => {
 // Helper functions
 
 async function generateEmbedding(text) {
+    console.log('Sending text to OpenAI for embedding:', text);
+
     const response = await openai.embeddings.create({
         model: "text-embedding-3-small",
         input: text
@@ -327,7 +333,7 @@ app.get('/api/data', async (req, res) => {
     try {
         const collection = client.db(dbName).collection(collectionName);
         const data = await collection.find({}).toArray();
-        console.log(data);
+        // console.log(data);
         res.json(data);
     } catch (error) {
         console.error('Error fetching data:', error);
@@ -353,13 +359,13 @@ async function enhanceQueryWithGPT(query) {
         max_tokens: 150
     });
 
-    console.log('Enhanced query:', completion.choices[0].message.content);
+    // console.log('Enhanced query:', completion.choices[0].message.content);
     return completion.choices[0].message.content;
 }
 
 async function processImage(imageBuffer) {
     const base64Image = imageBuffer.toString('base64');
-    console.log('Base64 image:', base64Image);
+    // console.log('Base64 image:', base64Image);
     try {
         const response = await openai.chat.completions.create({
             model: "gpt-4o-mini",  // Updated model name

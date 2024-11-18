@@ -9,12 +9,27 @@ dotenv.config();
 
 const app = express();
 // Updated CORS configuration
-app.use(cors({
-    origin: ['http://localhost:5173'],
-    methods: ['GET', 'POST', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
-    credentials: true
-}));
+app.use((req, res, next) => {
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://vector-search-demo-frontend.vercel.app'
+    ];
+    const origin = req.headers.origin;
+    
+    if (allowedOrigins.includes(origin)) {
+      res.setHeader('Access-Control-Allow-Origin', origin);
+    }
+    
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+      return res.status(200).end();
+    }
+    
+    next();
+  });
 
 app.use(express.json());
 

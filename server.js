@@ -4,39 +4,29 @@ import { MongoClient } from 'mongodb';
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import multer from 'multer';
+import cors from 'cors';
 
 dotenv.config();
 
 const app = express();
-// Updated CORS configuration
+
 app.use((req, res, next) => {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'https://vector-search-demo-frontend.vercel.app'
-    ];
-    const origin = req.headers.origin;
-    
-    if (allowedOrigins.includes(origin)) {
-      res.setHeader('Access-Control-Allow-Origin', origin);
-    }
-    
-    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-    
-    if (req.method === 'OPTIONS') {
-      return res.status(200).end();
-    }
-    
+    // Log incoming requests for debugging
+    console.log('Incoming request:', req.method, req.path, req.headers.origin);
     next();
   });
+// Updated CORS configuration
+app.use(cors({
+    origin: ['https://vector-search-demo-frontend.vercel.app', 'http://localhost:5173'],
+    methods: ['GET', 'POST', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+    optionsSuccessStatus: 200,
+    credentials: true
+  }));
 
 app.use(express.json());
 
-app.use((req, res, next) => {
-    //console.log(`${req.method} ${req.url}`);
-    next();
-});
+app.options('*', cors()); // Enable pre-flight for all routes
 
 const storage = multer.memoryStorage();
 const upload = multer({

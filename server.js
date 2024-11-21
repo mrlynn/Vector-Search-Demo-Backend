@@ -8,43 +8,39 @@ import winston from 'winston';
 dotenv.config();
 
 const app = express();
-
+app.use(express.json());
 const allowedOrigins = [
     'https://vector-search-demo-frontend.vercel.app',
     'http://localhost:5173',
-    'http://localhost:5174'
+    'http://localhost:5174',
 ];
-app.use(express.json());
 
-app.use((req, res, next) => {
-    // Log incoming requests for debugging
-    console.log('Incoming request:', req.method, req.path, req.headers.origin);
-    next();
-});
-// Updated CORS configuration
 app.use((req, res, next) => {
     const origin = req.headers.origin;
+
     if (allowedOrigins.includes(origin)) {
         res.setHeader('Access-Control-Allow-Origin', origin);
-        res.setHeader('Access-Control-Allow-Credentials', true);
-        res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type,Authorization,Accept');
+        res.setHeader('Access-Control-Allow-Credentials', 'true');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Accept');
     }
 
-    // Handle preflight
     if (req.method === 'OPTIONS') {
-        return res.status(200).end();
+        res.status(204).end();
+    } else {
+        next();
     }
-
+});
+// Preflight request handler
+// Log request details for debugging
+app.use((req, res, next) => {
+    console.log('Request details:', {
+        method: req.method,
+        path: req.path,
+        origin: req.headers.origin,
+    });
     next();
 });
-app.use((err, req, res, next) => {
-    console.error('Error:', err);
-    res.status(500).json({ error: 'Internal Server Error' });
-});
-
-app.options('*', cors()); // Enable pre-flight for all routes
-
 
 const logger = winston.createLogger({
     level: 'info',

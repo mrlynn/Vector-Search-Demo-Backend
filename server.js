@@ -5,6 +5,8 @@ import OpenAI from 'openai';
 import dotenv from 'dotenv';
 import multer from 'multer';
 import winston from 'winston';
+import config from './config/index.js';
+
 dotenv.config();
 
 const app = express();
@@ -432,25 +434,24 @@ async function generateEmbedding(text) {
 
 app.get('/api/data', async (req, res) => {
     try {
-        const collection = client.db(dbName).collection(collectionName);
-        const data = await collection.find({}).toArray();
-        // console.log(data);
-        res.json(data);
+      const collection = client.db(dbName).collection(collectionName);
+      const data = await collection.find({}).toArray();
+      res.json(data);
     } catch (error) {
-        console.error('Error fetching data:', error);
-        res.status(500).json({
-            error: 'Failed to fetch data',
-            details: process.env.NODE_ENV === 'development' ? error.message : undefined
-        });
+      console.error('Error fetching data:', error);
+      res.status(500).json({
+        error: 'Failed to fetch data',
+        details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      });
     }
-});
+  });
 async function enhanceQueryWithGPT(query) {
     const completion = await openai.chat.completions.create({
         model: "gpt-4o-mini",  // Updated model name
         messages: [
             {
                 role: "system",
-                content: "Convert the user's search query into a detailed product description that captures the semantic meaning. Focus on physical attributes, use cases, and key features."
+                content: "Convert the user's search query into a detailed product description, staying focused on the core concept. For misspelled words, correct them but maintain the original intent."
             },
             {
                 role: "user",
@@ -744,7 +745,7 @@ const PORT = process.env.PORT || 3003;
 
 
 // Health check endpoint
-app.get('/health', async (req, res) => {
+app.get('/api/health', async (req, res) => {
     try {
         const dbStatus = await client.db(dbName).command({ ping: 1 });
         res.json({

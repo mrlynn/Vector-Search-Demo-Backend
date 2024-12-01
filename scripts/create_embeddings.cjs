@@ -4,8 +4,8 @@ const { Configuration, OpenAIApi } = require("openai");
 
 // MongoDB and OpenAI configuration from .env
 const mongoUri = process.env.MONGODB_URI;
-const databaseName = process.env.DATABASE_NAME;
-const collectionName = process.env.COLLECTION_NAME;
+const databaseName = process.env.DATABASE_NAME || "product_search";
+const collectionName = process.env.COLLECTION_NAME || "products";
 const openaiApiKey = process.env.OPENAI_API_KEY;
 
 // Validate environment variables
